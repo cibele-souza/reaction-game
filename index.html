@@ -425,26 +425,34 @@
 
          /* Animations */
          @keyframes shake {
-            0%,
-            100% {
-               transform: translateX(0);
+            0% {
+               transform: translateX(0) rotate(0deg);
             }
-            20% {
-               transform: translateX(-8px);
+            15% {
+               transform: translateX(-10px) rotate(-2deg);
             }
-            40% {
-               transform: translateX(8px);
+            30% {
+               transform: translateX(10px) rotate(2deg);
+            }
+            45% {
+               transform: translateX(-8px) rotate(-1.5deg);
             }
             60% {
-               transform: translateX(-5px);
+               transform: translateX(8px) rotate(1.5deg);
             }
-            80% {
-               transform: translateX(5px);
+            75% {
+               transform: translateX(-5px) rotate(-1deg);
+            }
+            90% {
+               transform: translateX(5px) rotate(1deg);
+            }
+            100% {
+               transform: translateX(0) rotate(0deg);
             }
          }
 
          .shake {
-            animation: shake 0.4s ease;
+            animation: shake 0.5s ease forwards;
          }
 
          @keyframes pulse-glow {
@@ -460,11 +468,27 @@
          .pulse {
             animation: pulse-glow 1.2s ease-in-out infinite;
          }
+
+         /* False start red flash overlay */
+         #false-start-flash {
+            position: fixed;
+            inset: 0;
+            background: rgba(239, 68, 68, 0.18);
+            z-index: 50;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.1s;
+         }
+         #false-start-flash.active {
+            opacity: 1;
+            transition: opacity 0.05s;
+         }
       </style>
    </head>
    <body>
       <div id="canvas-container"></div>
       <div id="scanlines"></div>
+      <div id="false-start-flash"></div>
 
       <div id="ui">
          <div id="top-bar">
@@ -746,11 +770,12 @@
                ring2OpacityTarget = 0.4;
                ringMat.color.set(0xef4444);
                ring2Mat.color.set(0xef4444);
-               targetRotSpeed = { x: 0.02, y: 0.03 };
-               targetMainScale = 0.9;
+               // Moderate spin increase for false start
+               targetRotSpeed = { x: 0.018, y: 0.03 };
+               targetMainScale = 0.95;
                wireMat.color.set(0xef4444);
                wireMat.opacity = 0.6;
-               shakeIntensity = 0.3;
+               shakeIntensity = 0.8;
             } else if (state === "result") {
                targetColor.set(0x0a1f40);
                targetEmissive.set(0x051030);
@@ -793,14 +818,20 @@
                lerp(mainGroup.scale.x, targetMainScale, 0.08),
             );
 
-            // Shake decay
-            shakeIntensity *= 0.9;
-            const shakeX = shakeIntensity * (Math.random() - 0.5);
-            const shakeY = shakeIntensity * (Math.random() - 0.5);
+            // Shake decay — slower when in error state for longer frenzy
+            const shakeDecay = sceneState === "error" ? 0.97 : 0.9;
+            shakeIntensity *= shakeDecay;
+            const shakeX = shakeIntensity * (Math.random() - 0.5) * 2;
+            const shakeY = shakeIntensity * (Math.random() - 0.5) * 2;
 
-            // Rotation
-            rotSpeed.x = lerp(rotSpeed.x, targetRotSpeed.x, 0.05);
-            rotSpeed.y = lerp(rotSpeed.y, targetRotSpeed.y, 0.05);
+            // Rotation — in error state snap speed instantly for immediate frenzy
+            if (sceneState === "error") {
+               rotSpeed.x = lerp(rotSpeed.x, targetRotSpeed.x, 0.25);
+               rotSpeed.y = lerp(rotSpeed.y, targetRotSpeed.y, 0.25);
+            } else {
+               rotSpeed.x = lerp(rotSpeed.x, targetRotSpeed.x, 0.05);
+               rotSpeed.y = lerp(rotSpeed.y, targetRotSpeed.y, 0.05);
+            }
             mainGroup.rotation.x +=
                rotSpeed.x +
                (sceneState === "ready" ? Math.sin(elapsed * 3) * 0.002 : 0);
@@ -826,14 +857,18 @@
             // Ring animation
             ringMat.opacity = lerp(ringMat.opacity, ringOpacityTarget, 0.06);
             ring2Mat.opacity = lerp(ring2Mat.opacity, ring2OpacityTarget, 0.06);
-            ringMesh.rotation.z = elapsed * 0.3;
-            ring2Mesh.rotation.y = elapsed * 0.2;
+            ringMesh.rotation.z =
+               elapsed * (sceneState === "error" ? 2.5 : 0.3);
+            ring2Mesh.rotation.y =
+               elapsed * (sceneState === "error" ? 3.0 : 0.2);
             ring2Mesh.rotation.x = Math.PI / 3 + Math.sin(elapsed * 0.5) * 0.1;
 
             // Inner glow pulse
             if (sceneState === "ready") {
                glowMat.emissiveIntensity = 0.5 + Math.sin(elapsed * 6) * 0.3;
                glowMesh.scale.setScalar(1 + Math.sin(elapsed * 6) * 0.05);
+            } else if (sceneState === "error") {
+               glowMat.emissiveIntensity = 0.4 + Math.sin(elapsed * 20) * 0.4;
             } else {
                glowMat.emissiveIntensity = lerp(
                   glowMat.emissiveIntensity,
@@ -892,6 +927,7 @@
          const resetBtn = document.getElementById("reset-btn");
          const attemptsList = document.getElementById("attempts-list");
          const instructions = document.getElementById("instructions");
+         const falseStartFlash = document.getElementById("false-start-flash");
 
          function getRank(ms) {
             if (ms < 150) return { label: "SUPERHUMAN", color: "#F59E0B" };
@@ -1006,7 +1042,7 @@
 
             actionBtn.textContent = "WAITING...";
             actionBtn.className = "waiting";
-            actionBtn.disabled = true;
+            actionBtn.disabled = false; // must stay clickable to detect false starts
 
             setTimeout(() => {
                showState(
@@ -1048,10 +1084,18 @@
             }, 100);
          }
 
+         function triggerFalseStartEffects() {
+            // Shape shake is handled by shakeIntensity in the 3D animation loop
+            // No full-page shake or flash overlay
+         }
+
          function handleFalseStart() {
             gameState = STATES.ERROR;
-            setSceneState("error");
+            setSceneState("error"); // sets shakeIntensity = 1.5 and fast rotSpeed
             clearTimeout(waitTimer);
+
+            // Fire visual effects immediately
+            triggerFalseStartEffects();
 
             attempts.push({ time: null });
             renderAttempts();
@@ -1164,14 +1208,22 @@
          document.addEventListener("keydown", (e) => {
             if (e.code === "Space" || e.code === "Enter") {
                e.preventDefault();
-               actionBtn.click();
+               if (gameState === STATES.IDLE || gameState === STATES.RESULT) {
+                  startWaiting();
+               } else if (gameState === STATES.WAITING) {
+                  handleFalseStart();
+               } else if (gameState === STATES.READY) {
+                  handleReaction();
+               }
             }
          });
 
          // Touch support on canvas
          renderer.domElement.addEventListener("click", (e) => {
-            if (gameState === STATES.WAITING || gameState === STATES.READY) {
-               actionBtn.click();
+            if (gameState === STATES.WAITING) {
+               handleFalseStart();
+            } else if (gameState === STATES.READY) {
+               handleReaction();
             }
          });
 
