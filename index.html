@@ -1,0 +1,1184 @@
+<!doctype html>
+<html lang="en">
+   <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>REFLEX // Reaction Timer</title>
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link
+         href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Bebas+Neue&family=DM+Sans:wght@300;400;500&display=swap"
+         rel="stylesheet"
+      />
+      <style>
+         *,
+         *::before,
+         *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+         }
+
+         :root {
+            --bg: #0f172a;
+            --surface: #1e293b;
+            --surface2: #263347;
+            --text: #f1f5f9;
+            --ready: #10b981;
+            --waiting: #f59e0b;
+            --result: #3b82f6;
+            --error: #ef4444;
+            --muted: #94a3b8;
+            --border: rgba(148, 163, 184, 0.12);
+         }
+
+         html,
+         body {
+            height: 100%;
+            background: var(--bg);
+            color: var(--text);
+            font-family: "DM Sans", sans-serif;
+            overflow: hidden;
+         }
+
+         #canvas-container {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+         }
+
+         #canvas-container canvas {
+            display: block;
+            width: 100% !important;
+            height: 100% !important;
+         }
+
+         /* Vignette overlay */
+         #canvas-container::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(
+               ellipse at center,
+               transparent 40%,
+               rgba(15, 23, 42, 0.7) 100%
+            );
+            pointer-events: none;
+         }
+
+         #ui {
+            position: fixed;
+            inset: 0;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            padding: 28px 24px 32px;
+            pointer-events: none;
+         }
+
+         /* TOP BAR */
+         #top-bar {
+            width: 100%;
+            max-width: 900px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            pointer-events: all;
+         }
+
+         #logo {
+            font-family: "Bebas Neue", sans-serif;
+            font-size: clamp(22px, 4vw, 32px);
+            letter-spacing: 0.12em;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+         }
+
+         #logo span {
+            color: var(--ready);
+         }
+
+         #stats-bar {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+         }
+
+         .stat-pill {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 100px;
+            padding: 6px 14px;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            font-family: "Space Mono", monospace;
+            font-size: 12px;
+         }
+
+         .stat-pill .label {
+            color: var(--muted);
+            font-size: 10px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+         }
+
+         .stat-pill .value {
+            color: var(--text);
+            font-weight: 700;
+         }
+
+         /* CENTER */
+         #center {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            text-align: center;
+            flex: 1;
+            justify-content: center;
+            pointer-events: none;
+         }
+
+         #state-badge {
+            font-family: "Space Mono", monospace;
+            font-size: 11px;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            padding: 5px 14px;
+            border-radius: 100px;
+            border: 1px solid currentColor;
+            transition:
+               color 0.3s,
+               border-color 0.3s;
+            color: var(--muted);
+            opacity: 0;
+            transform: translateY(-6px);
+            transition:
+               opacity 0.3s,
+               transform 0.3s,
+               color 0.3s;
+         }
+
+         #state-badge.visible {
+            opacity: 1;
+            transform: translateY(0);
+         }
+
+         #big-number {
+            font-family: "Bebas Neue", sans-serif;
+            font-size: clamp(72px, 18vw, 180px);
+            line-height: 0.9;
+            letter-spacing: -0.02em;
+            color: var(--text);
+            transition: color 0.3s;
+            text-shadow: 0 0 80px rgba(59, 130, 246, 0.3);
+            opacity: 0;
+            transform: scale(0.95);
+            transition:
+               opacity 0.4s,
+               transform 0.4s,
+               color 0.3s;
+         }
+
+         #big-number.visible {
+            opacity: 1;
+            transform: scale(1);
+         }
+
+         #big-number.color-ready {
+            color: var(--ready);
+            text-shadow: 0 0 80px rgba(16, 185, 129, 0.4);
+         }
+         #big-number.color-error {
+            color: var(--error);
+            text-shadow: 0 0 80px rgba(239, 68, 68, 0.4);
+         }
+         #big-number.color-result {
+            color: var(--result);
+            text-shadow: 0 0 80px rgba(59, 130, 246, 0.4);
+         }
+
+         #sub-message {
+            font-size: clamp(13px, 2vw, 16px);
+            color: var(--muted);
+            font-weight: 300;
+            letter-spacing: 0.04em;
+            max-width: 380px;
+            opacity: 0;
+            transition: opacity 0.4s 0.1s;
+         }
+
+         #sub-message.visible {
+            opacity: 1;
+         }
+
+         /* BOTTOM */
+         #bottom {
+            width: 100%;
+            max-width: 900px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            pointer-events: all;
+         }
+
+         #action-btn {
+            font-family: "Bebas Neue", sans-serif;
+            font-size: clamp(15px, 3vw, 20px);
+            letter-spacing: 0.14em;
+            padding: 16px 56px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition:
+               transform 0.15s,
+               box-shadow 0.15s,
+               background 0.3s;
+            position: relative;
+            overflow: hidden;
+            background: var(--ready);
+            color: #0a1f12;
+            box-shadow:
+               0 8px 32px rgba(16, 185, 129, 0.35),
+               inset 0 1px 0 rgba(255, 255, 255, 0.2);
+         }
+
+         #action-btn::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: rgba(255, 255, 255, 0.08);
+            opacity: 0;
+            transition: opacity 0.2s;
+         }
+
+         #action-btn:hover::before {
+            opacity: 1;
+         }
+         #action-btn:active {
+            transform: scale(0.97);
+         }
+
+         #action-btn.error {
+            background: var(--error);
+            color: #fff;
+            box-shadow: 0 8px 32px rgba(239, 68, 68, 0.35);
+         }
+
+         #action-btn.waiting {
+            background: var(--waiting);
+            color: #0a0a00;
+            box-shadow: 0 8px 32px rgba(245, 158, 11, 0.35);
+            cursor: default;
+         }
+
+         #action-btn.result {
+            background: var(--result);
+            color: #fff;
+            box-shadow: 0 8px 32px rgba(59, 130, 246, 0.35);
+         }
+
+         #reset-btn {
+            font-family: "Space Mono", monospace;
+            font-size: 11px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--muted);
+            padding: 8px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition:
+               border-color 0.2s,
+               color 0.2s;
+            display: none;
+         }
+
+         #reset-btn:hover {
+            border-color: var(--muted);
+            color: var(--text);
+         }
+
+         #reset-btn.visible {
+            display: block;
+         }
+
+         #attempts-list {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 600px;
+         }
+
+         .attempt-dot {
+            width: 32px;
+            height: 32px;
+            border-radius: 4px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: "Space Mono", monospace;
+            font-size: 9px;
+            color: var(--muted);
+            transition: all 0.3s;
+            position: relative;
+         }
+
+         .attempt-dot.filled {
+            border-color: transparent;
+            font-size: 8px;
+            color: var(--bg);
+         }
+
+         .attempt-dot.best {
+            box-shadow: 0 0 0 2px var(--ready);
+         }
+
+         /* Instructions panel */
+         #instructions {
+            position: fixed;
+            bottom: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px 24px;
+            max-width: 360px;
+            width: calc(100% - 48px);
+            text-align: center;
+            z-index: 20;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.4s;
+         }
+
+         #instructions.visible {
+            opacity: 1;
+         }
+
+         #instructions p {
+            font-size: 13px;
+            color: var(--muted);
+            line-height: 1.6;
+         }
+
+         #instructions strong {
+            color: var(--text);
+            font-weight: 500;
+         }
+
+         /* Performance ranking */
+         #rank-badge {
+            font-family: "Bebas Neue", sans-serif;
+            font-size: 13px;
+            letter-spacing: 0.15em;
+            color: var(--waiting);
+            opacity: 0;
+            transition: opacity 0.3s 0.3s;
+         }
+
+         #rank-badge.visible {
+            opacity: 1;
+         }
+
+         /* Scan line effect */
+         #scanlines {
+            position: fixed;
+            inset: 0;
+            z-index: 5;
+            pointer-events: none;
+            background: repeating-linear-gradient(
+               0deg,
+               transparent,
+               transparent 2px,
+               rgba(0, 0, 0, 0.03) 2px,
+               rgba(0, 0, 0, 0.03) 4px
+            );
+         }
+
+         /* Mobile */
+         @media (max-width: 600px) {
+            #stats-bar {
+               gap: 8px;
+            }
+            .stat-pill {
+               padding: 5px 10px;
+               font-size: 11px;
+            }
+            .stat-pill .label {
+               font-size: 9px;
+            }
+            #ui {
+               padding: 20px 16px 24px;
+            }
+         }
+
+         /* Animations */
+         @keyframes shake {
+            0%,
+            100% {
+               transform: translateX(0);
+            }
+            20% {
+               transform: translateX(-8px);
+            }
+            40% {
+               transform: translateX(8px);
+            }
+            60% {
+               transform: translateX(-5px);
+            }
+            80% {
+               transform: translateX(5px);
+            }
+         }
+
+         .shake {
+            animation: shake 0.4s ease;
+         }
+
+         @keyframes pulse-glow {
+            0%,
+            100% {
+               opacity: 1;
+            }
+            50% {
+               opacity: 0.6;
+            }
+         }
+
+         .pulse {
+            animation: pulse-glow 1.2s ease-in-out infinite;
+         }
+      </style>
+   </head>
+   <body>
+      <div id="canvas-container"></div>
+      <div id="scanlines"></div>
+
+      <div id="ui">
+         <div id="top-bar">
+            <div id="logo">REFLEX<span>//</span></div>
+            <div id="stats-bar">
+               <div class="stat-pill">
+                  <span class="label">AVG</span>
+                  <span class="value" id="stat-avg">—</span>
+               </div>
+               <div class="stat-pill">
+                  <span class="label">BEST</span>
+                  <span class="value" id="stat-best">—</span>
+               </div>
+               <div class="stat-pill">
+                  <span class="label">N</span>
+                  <span class="value" id="stat-count">0</span>
+               </div>
+            </div>
+         </div>
+
+         <div id="center">
+            <div id="state-badge">READY TO BEGIN</div>
+            <div id="big-number">REFLEX</div>
+            <div id="sub-message">Test your reaction speed</div>
+            <div id="rank-badge"></div>
+         </div>
+
+         <div id="bottom">
+            <div id="attempts-list"></div>
+            <button id="action-btn">START</button>
+            <button id="reset-btn">Reset Session</button>
+         </div>
+      </div>
+
+      <div id="instructions">
+         <p>
+            <strong>How to play:</strong> Click START, then wait for the shape
+            to turn <strong style="color: #10b981">green</strong>. Click as fast
+            as you can!
+         </p>
+      </div>
+
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+      <script>
+         // ============================================================
+         // THREE.JS SCENE
+         // ============================================================
+         const container = document.getElementById("canvas-container");
+         const renderer = new THREE.WebGLRenderer({
+            antialias: true,
+            alpha: false,
+         });
+         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+         renderer.setSize(window.innerWidth, window.innerHeight);
+         renderer.setClearColor(0x0f172a, 1);
+         renderer.shadowMap.enabled = true;
+         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+         container.appendChild(renderer.domElement);
+
+         const scene = new THREE.Scene();
+         scene.fog = new THREE.FogExp2(0x0f172a, 0.045);
+
+         const camera = new THREE.PerspectiveCamera(
+            60,
+            window.innerWidth / window.innerHeight,
+            0.1,
+            100,
+         );
+         camera.position.set(0, 0, 8);
+
+         // Lighting
+         const ambientLight = new THREE.AmbientLight(0x1a2744, 0.8);
+         scene.add(ambientLight);
+
+         const dirLight = new THREE.DirectionalLight(0x3b82f6, 1.2);
+         dirLight.position.set(5, 8, 5);
+         dirLight.castShadow = true;
+         scene.add(dirLight);
+
+         const pointLight1 = new THREE.PointLight(0x10b981, 0, 10);
+         pointLight1.position.set(-4, 2, 4);
+         scene.add(pointLight1);
+
+         const pointLight2 = new THREE.PointLight(0xf59e0b, 0, 10);
+         pointLight2.position.set(4, -2, 4);
+         scene.add(pointLight2);
+
+         const pointLight3 = new THREE.PointLight(0xef4444, 0, 8);
+         pointLight3.position.set(0, 0, 5);
+         scene.add(pointLight3);
+
+         // Main reaction shape group
+         const mainGroup = new THREE.Group();
+         scene.add(mainGroup);
+
+         // Create main icosahedron
+         const icoGeo = new THREE.IcosahedronGeometry(1.4, 1);
+         const icoMat = new THREE.MeshStandardMaterial({
+            color: 0x1e3a5f,
+            metalness: 0.7,
+            roughness: 0.2,
+            wireframe: false,
+         });
+         const icoMesh = new THREE.Mesh(icoGeo, icoMat);
+         icoMesh.castShadow = true;
+         mainGroup.add(icoMesh);
+
+         // Wireframe overlay
+         const wireGeo = new THREE.IcosahedronGeometry(1.42, 1);
+         const wireMat = new THREE.MeshBasicMaterial({
+            color: 0x3b82f6,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.25,
+         });
+         const wireMesh = new THREE.Mesh(wireGeo, wireMat);
+         mainGroup.add(wireMesh);
+
+         // Inner glowing sphere
+         const glowGeo = new THREE.SphereGeometry(0.7, 32, 32);
+         const glowMat = new THREE.MeshStandardMaterial({
+            color: 0x3b82f6,
+            emissive: 0x1a4080,
+            emissiveIntensity: 0.5,
+            metalness: 0.1,
+            roughness: 0.8,
+            transparent: true,
+            opacity: 0.6,
+         });
+         const glowMesh = new THREE.Mesh(glowGeo, glowMat);
+         mainGroup.add(glowMesh);
+
+         // Orbiting particles
+         const orbitGroup = new THREE.Group();
+         mainGroup.add(orbitGroup);
+
+         const orbitParticles = [];
+         const orbitCount = 8;
+         for (let i = 0; i < orbitCount; i++) {
+            const angle = (i / orbitCount) * Math.PI * 2;
+            const radius = 2.2;
+            const particleGeo = new THREE.OctahedronGeometry(0.1, 0);
+            const particleMat = new THREE.MeshStandardMaterial({
+               color: 0x3b82f6,
+               emissive: 0x3b82f6,
+               emissiveIntensity: 0.5,
+               metalness: 0.5,
+               roughness: 0.3,
+            });
+            const particle = new THREE.Mesh(particleGeo, particleMat);
+            particle.position.set(
+               Math.cos(angle) * radius,
+               Math.sin(angle) * 0.5,
+               Math.sin(angle) * radius * 0.4,
+            );
+            orbitGroup.add(particle);
+            orbitParticles.push({
+               mesh: particle,
+               angle,
+               speed: 0.4 + Math.random() * 0.3,
+            });
+         }
+
+         // Background floating particles
+         const bgParticleCount = 120;
+         const bgGeo = new THREE.BufferGeometry();
+         const bgPositions = new Float32Array(bgParticleCount * 3);
+         for (let i = 0; i < bgParticleCount; i++) {
+            bgPositions[i * 3] = (Math.random() - 0.5) * 30;
+            bgPositions[i * 3 + 1] = (Math.random() - 0.5) * 20;
+            bgPositions[i * 3 + 2] = (Math.random() - 0.5) * 15 - 5;
+         }
+         bgGeo.setAttribute(
+            "position",
+            new THREE.BufferAttribute(bgPositions, 3),
+         );
+         const bgMat = new THREE.PointsMaterial({
+            color: 0x94a3b8,
+            size: 0.06,
+            transparent: true,
+            opacity: 0.4,
+            sizeAttenuation: true,
+         });
+         const bgPoints = new THREE.Points(bgGeo, bgMat);
+         scene.add(bgPoints);
+
+         // Ring effect
+         const ringGeo = new THREE.TorusGeometry(2.0, 0.02, 8, 80);
+         const ringMat = new THREE.MeshBasicMaterial({
+            color: 0x3b82f6,
+            transparent: true,
+            opacity: 0,
+         });
+         const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+         mainGroup.add(ringMesh);
+
+         // Second ring (tilted)
+         const ring2Geo = new THREE.TorusGeometry(2.4, 0.015, 8, 80);
+         const ring2Mat = new THREE.MeshBasicMaterial({
+            color: 0x10b981,
+            transparent: true,
+            opacity: 0,
+         });
+         const ring2Mesh = new THREE.Mesh(ring2Geo, ring2Mat);
+         ring2Mesh.rotation.x = Math.PI / 3;
+         mainGroup.add(ring2Mesh);
+
+         // Animation state
+         let sceneState = "idle"; // idle, waiting, ready, error, result
+         let targetColor = new THREE.Color(0x1e3a5f);
+         let targetEmissive = new THREE.Color(0x1a4080);
+         let targetOrbitColor = new THREE.Color(0x3b82f6);
+         let ringOpacityTarget = 0;
+         let ring2OpacityTarget = 0;
+         let mainScale = 1.0;
+         let targetMainScale = 1.0;
+         let rotSpeed = { x: 0.003, y: 0.006 };
+         let targetRotSpeed = { x: 0.003, y: 0.006 };
+         let shakeIntensity = 0;
+         let pulsePhase = 0;
+
+         function setSceneState(state) {
+            sceneState = state;
+            if (state === "idle") {
+               targetColor.set(0x1e3a5f);
+               targetEmissive.set(0x0a2040);
+               targetOrbitColor.set(0x3b82f6);
+               pointLight1.color.set(0x10b981);
+               pointLight1.intensity = 0;
+               pointLight2.color.set(0xf59e0b);
+               pointLight2.intensity = 0;
+               pointLight3.intensity = 0;
+               ringOpacityTarget = 0;
+               ring2OpacityTarget = 0;
+               targetRotSpeed = { x: 0.003, y: 0.006 };
+               targetMainScale = 1.0;
+               wireMat.color.set(0x3b82f6);
+               wireMat.opacity = 0.25;
+            } else if (state === "waiting") {
+               targetColor.set(0x3d2a00);
+               targetEmissive.set(0x301e00);
+               targetOrbitColor.set(0xf59e0b);
+               pointLight2.color.set(0xf59e0b);
+               pointLight2.intensity = 1.5;
+               pointLight1.intensity = 0;
+               pointLight3.intensity = 0;
+               ringOpacityTarget = 0.4;
+               ring2OpacityTarget = 0;
+               ringMat.color.set(0xf59e0b);
+               targetRotSpeed = { x: 0.008, y: 0.012 };
+               targetMainScale = 1.05;
+               wireMat.color.set(0xf59e0b);
+               wireMat.opacity = 0.35;
+            } else if (state === "ready") {
+               targetColor.set(0x0a3020);
+               targetEmissive.set(0x052014);
+               targetOrbitColor.set(0x10b981);
+               pointLight1.color.set(0x10b981);
+               pointLight1.intensity = 3.0;
+               pointLight2.intensity = 0;
+               pointLight3.intensity = 0;
+               ringOpacityTarget = 0.6;
+               ring2OpacityTarget = 0.5;
+               ringMat.color.set(0x10b981);
+               ring2Mat.color.set(0x10b981);
+               targetRotSpeed = { x: 0.001, y: 0.002 };
+               targetMainScale = 1.15;
+               wireMat.color.set(0x10b981);
+               wireMat.opacity = 0.5;
+            } else if (state === "error") {
+               targetColor.set(0x3d0a0a);
+               targetEmissive.set(0x300505);
+               targetOrbitColor.set(0xef4444);
+               pointLight3.color.set(0xef4444);
+               pointLight3.intensity = 3.0;
+               pointLight1.intensity = 0;
+               pointLight2.intensity = 0;
+               ringOpacityTarget = 0.7;
+               ring2OpacityTarget = 0.4;
+               ringMat.color.set(0xef4444);
+               ring2Mat.color.set(0xef4444);
+               targetRotSpeed = { x: 0.02, y: 0.03 };
+               targetMainScale = 0.9;
+               wireMat.color.set(0xef4444);
+               wireMat.opacity = 0.6;
+               shakeIntensity = 0.3;
+            } else if (state === "result") {
+               targetColor.set(0x0a1f40);
+               targetEmissive.set(0x051030);
+               targetOrbitColor.set(0x3b82f6);
+               pointLight1.color.set(0x3b82f6);
+               pointLight1.intensity = 2.0;
+               pointLight2.intensity = 0;
+               pointLight3.intensity = 0;
+               ringOpacityTarget = 0.5;
+               ring2OpacityTarget = 0.4;
+               ringMat.color.set(0x3b82f6);
+               ring2Mat.color.set(0x3b82f6);
+               targetRotSpeed = { x: 0.005, y: 0.008 };
+               targetMainScale = 1.08;
+               wireMat.color.set(0x3b82f6);
+               wireMat.opacity = 0.4;
+            }
+         }
+
+         const clock = new THREE.Clock();
+
+         function lerp(a, b, t) {
+            return a + (b - a) * t;
+         }
+
+         function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            const elapsed = clock.getElapsedTime();
+
+            pulsePhase += delta * 2;
+
+            // Smooth color transitions
+            icoMat.color.lerp(targetColor, 0.06);
+            icoMat.emissive.lerp(targetEmissive, 0.06);
+            glowMat.emissive.lerp(targetEmissive, 0.06);
+
+            // Scale
+            mainGroup.scale.setScalar(
+               lerp(mainGroup.scale.x, targetMainScale, 0.08),
+            );
+
+            // Shake decay
+            shakeIntensity *= 0.9;
+            const shakeX = shakeIntensity * (Math.random() - 0.5);
+            const shakeY = shakeIntensity * (Math.random() - 0.5);
+
+            // Rotation
+            rotSpeed.x = lerp(rotSpeed.x, targetRotSpeed.x, 0.05);
+            rotSpeed.y = lerp(rotSpeed.y, targetRotSpeed.y, 0.05);
+            mainGroup.rotation.x +=
+               rotSpeed.x +
+               (sceneState === "ready" ? Math.sin(elapsed * 3) * 0.002 : 0);
+            mainGroup.rotation.y += rotSpeed.y;
+            mainGroup.position.x = shakeX + Math.sin(elapsed * 0.5) * 0.1;
+            mainGroup.position.y = shakeY + Math.cos(elapsed * 0.7) * 0.1;
+
+            // Orbit particles
+            orbitParticles.forEach((p, i) => {
+               p.angle += p.speed * delta;
+               const radius = 2.2;
+               p.mesh.position.x = Math.cos(p.angle) * radius;
+               p.mesh.position.z = Math.sin(p.angle) * radius * 0.4;
+               p.mesh.position.y = Math.sin(p.angle * 1.5) * 0.5;
+               p.mesh.rotation.x += delta * 2;
+               p.mesh.rotation.z += delta * 1.5;
+               p.mesh.material.color.lerp(targetOrbitColor, 0.05);
+               p.mesh.material.emissive.lerp(targetOrbitColor, 0.05);
+               const pulseScale = 1 + Math.sin(pulsePhase + i) * 0.2;
+               p.mesh.scale.setScalar(lerp(p.mesh.scale.x, pulseScale, 0.1));
+            });
+
+            // Ring animation
+            ringMat.opacity = lerp(ringMat.opacity, ringOpacityTarget, 0.06);
+            ring2Mat.opacity = lerp(ring2Mat.opacity, ring2OpacityTarget, 0.06);
+            ringMesh.rotation.z = elapsed * 0.3;
+            ring2Mesh.rotation.y = elapsed * 0.2;
+            ring2Mesh.rotation.x = Math.PI / 3 + Math.sin(elapsed * 0.5) * 0.1;
+
+            // Inner glow pulse
+            if (sceneState === "ready") {
+               glowMat.emissiveIntensity = 0.5 + Math.sin(elapsed * 6) * 0.3;
+               glowMesh.scale.setScalar(1 + Math.sin(elapsed * 6) * 0.05);
+            } else {
+               glowMat.emissiveIntensity = lerp(
+                  glowMat.emissiveIntensity,
+                  0.3,
+                  0.05,
+               );
+               glowMesh.scale.setScalar(lerp(glowMesh.scale.x, 1.0, 0.05));
+            }
+
+            // Camera gentle drift
+            camera.position.x = Math.sin(elapsed * 0.2) * 0.3;
+            camera.position.y = Math.cos(elapsed * 0.15) * 0.2;
+            camera.lookAt(0, 0, 0);
+
+            // Bg particles slow drift
+            bgPoints.rotation.y = elapsed * 0.02;
+            bgPoints.rotation.x = elapsed * 0.01;
+
+            renderer.render(scene, camera);
+         }
+
+         animate();
+
+         window.addEventListener("resize", () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+         });
+
+         // ============================================================
+         // GAME LOGIC
+         // ============================================================
+         const STATES = {
+            IDLE: "idle",
+            WAITING: "waiting",
+            READY: "ready",
+            ERROR: "error",
+            RESULT: "result",
+         };
+
+         let gameState = STATES.IDLE;
+         let waitTimer = null;
+         let startTime = null;
+         let attempts = []; // { time, isBest }
+         let currentBest = Infinity;
+
+         // DOM refs
+         const statAvg = document.getElementById("stat-avg");
+         const statBest = document.getElementById("stat-best");
+         const statCount = document.getElementById("stat-count");
+         const stateBadge = document.getElementById("state-badge");
+         const bigNumber = document.getElementById("big-number");
+         const subMessage = document.getElementById("sub-message");
+         const rankBadge = document.getElementById("rank-badge");
+         const actionBtn = document.getElementById("action-btn");
+         const resetBtn = document.getElementById("reset-btn");
+         const attemptsList = document.getElementById("attempts-list");
+         const instructions = document.getElementById("instructions");
+
+         function getRank(ms) {
+            if (ms < 150) return { label: "SUPERHUMAN", color: "#F59E0B" };
+            if (ms < 200) return { label: "ELITE", color: "#10B981" };
+            if (ms < 250) return { label: "PRO", color: "#3B82F6" };
+            if (ms < 350) return { label: "AVERAGE", color: "#94A3B8" };
+            return { label: "WARMING UP", color: "#64748B" };
+         }
+
+         function formatMs(ms) {
+            return ms < 1000 ? ms + "ms" : (ms / 1000).toFixed(2) + "s";
+         }
+
+         function updateStats() {
+            const validTimes = attempts
+               .filter((a) => a.time !== null)
+               .map((a) => a.time);
+            statCount.textContent = validTimes.length;
+
+            if (validTimes.length > 0) {
+               const avg = Math.round(
+                  validTimes.reduce((a, b) => a + b, 0) / validTimes.length,
+               );
+               const best = Math.min(...validTimes);
+               statAvg.textContent = formatMs(avg);
+               statBest.textContent = formatMs(best);
+            } else {
+               statAvg.textContent = "—";
+               statBest.textContent = "—";
+            }
+         }
+
+         function renderAttempts() {
+            attemptsList.innerHTML = "";
+            const validAttempts = attempts.filter((a) => a.time !== null);
+            const best = validAttempts.length
+               ? Math.min(...validAttempts.map((a) => a.time))
+               : Infinity;
+
+            attempts.forEach((a, i) => {
+               const dot = document.createElement("div");
+               dot.className = "attempt-dot";
+
+               if (a.time !== null) {
+                  dot.classList.add("filled");
+                  const rank = getRank(a.time);
+                  dot.style.background = rank.color + "22";
+                  dot.style.color = rank.color;
+                  dot.style.borderColor = rank.color + "44";
+                  dot.textContent =
+                     a.time < 1000 ? a.time : (a.time / 1000).toFixed(1) + "s";
+                  if (a.time === best && validAttempts.length > 0) {
+                     dot.classList.add("best");
+                     dot.style.boxShadow = "0 0 0 2px " + rank.color;
+                  }
+               } else {
+                  dot.innerHTML = "✗";
+                  dot.style.color = "#EF4444";
+                  dot.style.borderColor = "#EF444444";
+               }
+
+               attemptsList.appendChild(dot);
+            });
+         }
+
+         function showState(label, number, sub, badgeColor, numColorClass) {
+            stateBadge.textContent = label;
+            stateBadge.style.color = badgeColor;
+            stateBadge.style.borderColor = badgeColor + "88";
+            stateBadge.classList.add("visible");
+
+            bigNumber.textContent = number;
+            bigNumber.className = "visible " + (numColorClass || "");
+
+            subMessage.textContent = sub;
+            subMessage.classList.add("visible");
+         }
+
+         function hideCenter() {
+            stateBadge.classList.remove("visible");
+            bigNumber.classList.remove("visible");
+            subMessage.classList.remove("visible");
+            rankBadge.classList.remove("visible");
+         }
+
+         function transitionToIdle() {
+            gameState = STATES.IDLE;
+            setSceneState("idle");
+            hideCenter();
+            setTimeout(() => {
+               showState(
+                  "READY TO BEGIN",
+                  "REFLEX",
+                  "Test your reaction speed",
+                  "var(--muted)",
+                  "",
+               );
+               bigNumber.style.fontSize = "";
+               instructions.classList.add("visible");
+            }, 300);
+            actionBtn.textContent = "START";
+            actionBtn.className = "";
+            resetBtn.classList.remove("visible");
+         }
+
+         function startWaiting() {
+            gameState = STATES.WAITING;
+            setSceneState("waiting");
+            hideCenter();
+            instructions.classList.remove("visible");
+            resetBtn.classList.remove("visible");
+
+            actionBtn.textContent = "WAITING...";
+            actionBtn.className = "waiting";
+            actionBtn.disabled = true;
+
+            setTimeout(() => {
+               showState(
+                  "STAND BY",
+                  "...",
+                  "Shape will turn green — click fast!",
+                  "var(--waiting)",
+                  "",
+               );
+               bigNumber.style.fontSize = "clamp(48px, 12vw, 120px)";
+            }, 200);
+
+            const delay = 1000 + Math.random() * 4000;
+            waitTimer = setTimeout(() => {
+               if (gameState !== STATES.WAITING) return;
+               triggerReady();
+            }, delay);
+         }
+
+         function triggerReady() {
+            gameState = STATES.READY;
+            setSceneState("ready");
+            startTime = performance.now();
+            actionBtn.disabled = false;
+            actionBtn.textContent = "CLICK NOW!";
+            actionBtn.className = "";
+            hideCenter();
+
+            setTimeout(() => {
+               showState(
+                  "GO!",
+                  "NOW!",
+                  "Click the button!",
+                  "var(--ready)",
+                  "color-ready",
+               );
+               bigNumber.style.fontSize = "clamp(80px, 20vw, 200px)";
+               bigNumber.classList.add("pulse");
+            }, 100);
+         }
+
+         function handleFalseStart() {
+            gameState = STATES.ERROR;
+            setSceneState("error");
+            clearTimeout(waitTimer);
+
+            attempts.push({ time: null });
+            renderAttempts();
+            updateStats();
+
+            actionBtn.disabled = true;
+            actionBtn.textContent = "TOO EARLY!";
+            actionBtn.className = "error";
+
+            hideCenter();
+            setTimeout(() => {
+               showState(
+                  "FALSE START",
+                  "EARLY!",
+                  "Wait for the shape to turn green",
+                  "var(--error)",
+                  "color-error",
+               );
+               bigNumber.style.fontSize = "clamp(60px, 14vw, 140px)";
+               bigNumber.classList.remove("pulse");
+            }, 150);
+
+            rankBadge.textContent = "";
+            rankBadge.classList.remove("visible");
+            resetBtn.classList.add("visible");
+
+            setTimeout(() => {
+               if (gameState !== STATES.ERROR) return;
+               gameState = STATES.IDLE;
+               setSceneState("idle");
+               hideCenter();
+               setTimeout(() => {
+                  showState(
+                     "TRY AGAIN",
+                     "REFLEX",
+                     "Better luck next time!",
+                     "var(--muted)",
+                     "",
+                  );
+                  bigNumber.style.fontSize = "";
+               }, 300);
+               actionBtn.textContent = "TRY AGAIN";
+               actionBtn.className = "";
+               actionBtn.disabled = false;
+               resetBtn.classList.add("visible");
+            }, 2000);
+         }
+
+         function handleReaction() {
+            const reactionTime = Math.round(performance.now() - startTime);
+            gameState = STATES.RESULT;
+            setSceneState("result");
+
+            attempts.push({ time: reactionTime });
+            currentBest = Math.min(currentBest, reactionTime);
+            renderAttempts();
+            updateStats();
+
+            const rank = getRank(reactionTime);
+            hideCenter();
+            setTimeout(() => {
+               bigNumber.classList.remove("pulse");
+               showState(
+                  "REACTION TIME",
+                  reactionTime + "ms",
+                  "Click to try again",
+                  "var(--result)",
+                  "color-result",
+               );
+               bigNumber.style.fontSize = "clamp(60px, 15vw, 150px)";
+               rankBadge.textContent = rank.label;
+               rankBadge.style.color = rank.color;
+               rankBadge.classList.add("visible");
+            }, 150);
+
+            actionBtn.textContent = "TRY AGAIN";
+            actionBtn.className = "result";
+            actionBtn.disabled = false;
+            resetBtn.classList.add("visible");
+         }
+
+         function resetSession() {
+            clearTimeout(waitTimer);
+            waitTimer = null;
+            startTime = null;
+            attempts = [];
+            currentBest = Infinity;
+            gameState = STATES.IDLE;
+
+            renderAttempts();
+            updateStats();
+            bigNumber.classList.remove("pulse");
+            transitionToIdle();
+         }
+
+         // Button handler
+         actionBtn.addEventListener("click", () => {
+            if (gameState === STATES.IDLE || gameState === STATES.RESULT) {
+               startWaiting();
+            } else if (gameState === STATES.WAITING) {
+               handleFalseStart();
+            } else if (gameState === STATES.READY) {
+               handleReaction();
+            }
+         });
+
+         resetBtn.addEventListener("click", resetSession);
+
+         // Keyboard support
+         document.addEventListener("keydown", (e) => {
+            if (e.code === "Space" || e.code === "Enter") {
+               e.preventDefault();
+               actionBtn.click();
+            }
+         });
+
+         // Touch support on canvas
+         renderer.domElement.addEventListener("click", (e) => {
+            if (gameState === STATES.WAITING || gameState === STATES.READY) {
+               actionBtn.click();
+            }
+         });
+
+         // Init
+         setSceneState("idle");
+         transitionToIdle();
+         instructions.classList.add("visible");
+      </script>
+   </body>
+</html>
