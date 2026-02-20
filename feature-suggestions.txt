@@ -1,0 +1,33 @@
+Prioritize features by player value and implementation cost:
+
+Difficulty scaling & progressive levels — increases replayability (medium).
+Persistent high scores, player profiles & achievements — retention (low).
+Sound effects + music + toggle settings — polish (low).
+Touch / mobile support (tap regions) + configurable input mapping — reach & accessibility (medium).
+Multiplayer (local hotseat or simple WebSocket matchmaking) — big engagement boost (high).
+Power-ups / modifiers (slow time, double points) — variety (medium).
+Visual polish: particle effects, animations, transition UI — perceived quality (low).
+Accessibility: colorblind mode, scalable fonts, screenreader labels — inclusiveness (low).
+Leaderboard (local + optional cloud) with anti-cheat basics — competitiveness (medium).
+Replay / ghost system (show previous run) — learning & fun (high).
+Analytics & telemetry for gameplay tuning (opt-in) — data-driven improvements (low).
+Localization framework + a couple language translations — broader audience (low).
+Unit tests & CI pipeline for core logic (timing, scoring) — reliability (low).
+Packaging: build scripts for Windows exe / web deploy / PWA — distribution (medium).
+Implementation hints (short):
+
+Difficulty scaling: increase target speed or reduce reaction windows per level; centralize difficulty constants in a single config module.
+Persistence: save scores and settings to localStorage (or file for desktop). Use JSON schema and simple versioning.
+Touch input: abstract input layer so clicks, keypress, and touches call the same handlers.
+Sound: preload audio buffers, play via small audio manager with volume/pause controls.
+Multiplayer: start with local hotseat rounds, later add a simple Node WebSocket server for latency-tolerant turns.
+Leaderboards: implement local first; add optional server endpoint later. Validate scores on server if using cloud.
+Tests: add unit tests for timing & scoring functions (Jest or your test runner), and end-to-end smoke tests for major flows.
+Suggested files to add/refactor:
+
+src/game/config.js — central difficulty/settings constants
+src/game/input.js — unified input (keyboard/mouse/touch)
+src/ui/soundManager.js — audio handling + settings UI
+src/storage/highscores.js — persistence helpers
+tests/score.test.js — unit tests for scoring logic
+docs/ROADMAP.md — feature roadmap & priorities 

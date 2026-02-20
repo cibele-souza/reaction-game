@@ -15,7 +15,6 @@ Clicking too early triggers a **false start** penalty with a red alert on the sh
 - 3D icosahedron with dynamic lighting that changes color by game state (amber → green → blue → red)
 - Tracks average, best time, and session history with color-coded attempt dots
 - Performance rankings: Warming Up / Average / Pro / Elite / Superhuman
-- Keyboard and touch/canvas click support
 
 ## Stack
 
